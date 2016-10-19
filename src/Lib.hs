@@ -45,7 +45,7 @@ isEmpty _ = False
 
 
 isPartial :: Pixel -> Bool
-isPartial Letter (Both _) = False
+isPartial (Letter (Both _)) = False
 isPartial Black = False
 isPartial _ = True
 
@@ -56,8 +56,13 @@ matchLetter Empty _ = True
 matchLetter (Letter l) ch = letter l == ch
 
 
+extendLetter :: Letter -> Letter
+extendLetter (Vert ch) = Both ch
+extendLetter l = l
+
+
 completed :: Puzzle -> Bool
-completed = all (all not . isEmpty)
+completed = all $ all $ not . isEmpty
 
 
 letter :: Letter -> Char
@@ -124,6 +129,10 @@ fitWord _ []                 = Nothing
 fitWord [] row               = Just ([], row)
 fitWord (ch:word) (pixel:row) =
   if matchLetter pixel ch then
-    first ((:) (Just $ Letter $ Horz ch)) <$> fitWord word row
+    let
+      pixel' = case pixel of
+        Empty -> Letter $ Horz ch
+        Letter l -> Letter $ extendLetter l
+    in first ((:) pixel') <$> fitWord word row
   else
     Nothing
