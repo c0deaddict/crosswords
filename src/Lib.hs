@@ -2,10 +2,16 @@
 
 module Lib
     ( solve
+    , emptyPuzzle
+    , Word
+    , Puzzle
+    , partialsCount
+    , lettersToEmptyRatio
     ) where
 
 import           Data.List
 import           Data.Maybe
+import           Data.Ratio
 import           Prelude    hiding (Word)
 
 type Word = String
@@ -42,10 +48,35 @@ isEmpty Empty = True
 isEmpty _     = False
 
 
+isBlack :: Pixel -> Bool
+isBlack Black = True
+isBlack _     = False
+
+
+isEmptyOrBlack :: Pixel -> Bool
+isEmptyOrBlack pixel = isEmpty pixel || isBlack pixel
+
+
 isPartial :: Pixel -> Bool
 isPartial (Letter (Horz _)) = True
 isPartial (Letter (Vert _)) = True
 isPartial _                 = False
+
+
+partialsInRow :: Row -> Int
+partialsInRow row = partialsInRow' (Empty : row ++ [Empty]) where
+  partialsInRow' (a:xs@(b:c:ys)) =
+    partialsInRow' xs + case b of
+      Letter (Vert _) ->
+        if isEmptyOrBlack a && isEmptyOrBlack c then 0 else 1
+      _               -> 0
+  partialsInRow' _ = 0
+
+
+partialsCount :: Puzzle -> Int
+partialsCount puzzle =
+  sum (map partialsInRow puzzle) +
+    sum (map partialsInRow (flipPuzzle puzzle))
 
 
 matchLetter :: Pixel -> Char -> Bool
@@ -59,8 +90,24 @@ extendLetter (Vert ch) = Both ch
 extendLetter l         = l
 
 
-noPartials :: Puzzle -> Bool
-noPartials = all $ all $ not . isPartial
+nonEmpty :: Puzzle -> Bool
+nonEmpty = all $ all $ not . isEmpty
+
+
+countLetters :: Puzzle -> Int
+countLetters = sum . fmap (foldr sumLetters 0) where
+  sumLetters (Letter _) acc = acc + 1
+  sumLetters Black acc      = acc + 1
+  sumLetters _ acc          = acc
+
+
+pixelsCount :: Puzzle -> Int
+pixelsCount puzzle = length puzzle * length (head puzzle)
+
+
+lettersToEmptyRatio :: Fractional a => Puzzle -> a
+lettersToEmptyRatio puzzle =
+  fromIntegral (countLetters puzzle) / fromIntegral (pixelsCount puzzle)
 
 
 letter :: Letter -> Char
@@ -92,9 +139,9 @@ flipPuzzle = fmap (fmap flipPixel) <$> transpose where
 solve :: WordList -> Puzzle -> [Puzzle]
 solve [] puzzle = [puzzle]
 solve (word:rest) puzzle =
-  concatMap (solve rest) $
-    (flipPuzzle <$> fitWordIntoPuzzle word puzzle)
-  ++ solve rest puzzle -- Also try it without this word
+  (solve rest puzzle) ++
+  (concatMap (solve rest) $
+    (flipPuzzle <$> fitWordIntoPuzzle word puzzle))
 
 
 -- All possible permutations of fitting a word into a puzzle
