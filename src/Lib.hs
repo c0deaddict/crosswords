@@ -4,10 +4,10 @@ module Lib
     ( solve
     ) where
 
+import           Control.Arrow (first)
 import           Data.List
 import           Data.Maybe
-import Control.Arrow(first)
-import           Prelude    hiding (Word)
+import           Prelude       hiding (Word)
 
 type Word = String
 type WordList = [Word]
@@ -30,8 +30,8 @@ instance Show Pixel where
   show (Letter (Horz ch)) = ch : "-"
   show (Letter (Vert ch)) = ch : "|"
   show (Letter (Both ch)) = ch : " "
-  show Black        = "##"
-  show Empty        = "??"
+  show Black              = "##"
+  show Empty              = "??"
 
 instance {-# OVERLAPPING #-} Show Puzzle where
   show p = intercalate "\n" (map row p) where
@@ -41,24 +41,24 @@ instance {-# OVERLAPPING #-} Show Puzzle where
 
 isEmpty :: Pixel -> Bool
 isEmpty Empty = True
-isEmpty _ = False
+isEmpty _     = False
 
 
 isPartial :: Pixel -> Bool
 isPartial (Letter (Both _)) = False
-isPartial Black = False
-isPartial _ = True
+isPartial Black             = False
+isPartial _                 = True
 
 
 matchLetter :: Pixel -> Char -> Bool
-matchLetter Black _ = False
-matchLetter Empty _ = True
+matchLetter Black _       = False
+matchLetter Empty _       = True
 matchLetter (Letter l) ch = letter l == ch
 
 
 extendLetter :: Letter -> Letter
 extendLetter (Vert ch) = Both ch
-extendLetter l = l
+extendLetter l         = l
 
 
 completed :: Puzzle -> Bool
@@ -73,17 +73,21 @@ letter (Both ch) = ch
 flipLetter :: Letter -> Letter
 flipLetter (Vert ch) = Horz ch
 flipLetter (Horz ch) = Vert ch
-flipLetter other = other
+flipLetter other     = other
+
+
+emptyRow :: Int -> Row
+emptyRow w = replicate w Empty
 
 
 emptyPuzzle :: Shape -> Puzzle
-emptyPuzzle (w, h) = replicate h $ replicate w Empty
+emptyPuzzle (w, h) = replicate h $ emptyRow w
 
 
 flipPuzzle :: Puzzle -> Puzzle
 flipPuzzle = fmap (fmap flipPixel) <$> transpose where
   flipPixel (Letter l) = Letter $ flipLetter l
-  flipPixel p = p
+  flipPixel p          = p
 
 
 filterWords :: Shape -> WordList -> WordList
@@ -125,28 +129,43 @@ iter (word:words) (row:rows) = undefined
 
 -- All possible permutations of fitting a word in a row
 fitWordPermutations :: Word -> Row -> [Row]
-fitWordPermutations word row
-  | length word > length row = []
-  | otherwise =
-    fitWord word row 
-
-validateWordFit :: (Row, Row) -> Maybe Row
-validateWordFit (match, []) = Just match
-validateWordFit (match, remainder@(Black:_)) =
+fitWordPermutations word row = mapMaybe tryFit rowOffsets where
+  minLength r = length r >= length word
+  -- Split row into all possible offets. Tail must have min length of word
+  rowOffsets = filter (minLength . snd) $ subLists row
+  -- If the tail fits, then append the head
+  tryFit (h, t) = (++) h <$> fitWord word t
 
 
-
--- Try to fit a word in a row. Returns Just (match, remainder) if it fits.
--- The first part (match) has the letters of the word filled in.
-fitWord :: Word -> Row -> Maybe (Row, Row)
-fitWord _ []                 = Nothing
-fitWord [] row               = Just ([], row)
+-- Try to fit a word in a row. Fills the word into the row if it fits.
+-- If the word doesn't end in the last cell of the row, a Black cell is required
+-- (and filled in if it was Empty) after the word.
+fitWord :: Word -> Row -> Maybe Row
+fitWord [] []            = Just []
+fitWord _  []            = Nothing
+fitWord [] row@(Black:_) = Just row
+fitWord [] (Empty:rest)  = Just (Black:rest)
+fitWord [] _             = Nothing
 fitWord (ch:word) (pixel:row) =
   if matchLetter pixel ch then
     let
       pixel' = case pixel of
-        Empty -> Letter $ Horz ch
+        Empty    -> Letter $ Horz ch
         Letter l -> Letter $ extendLetter l
-    in first ((:) pixel') <$> fitWord word row
+    in (:) pixel' <$> fitWord word row
   else
     Nothing
+
+
+-- Split a list on every possible index
+-- subLists [1,2,3] =
+--   [ ([], [1,2,3])
+--   , ([1], [2,3])
+--   , ([1,2], [3])
+--   , ([1,2,3], [])
+--   ]
+subLists :: [a] -> [([a], [a])]
+subLists = subListsAcc [] where
+  subListsAcc :: [a] -> [a] -> [([a], [a])]
+  subListsAcc acc []     = []
+  subListsAcc acc (x:xs) = (acc, xs) : subListsAcc (acc ++ [x]) xs
