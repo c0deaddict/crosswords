@@ -123,7 +123,21 @@ iter (word:words) (row:rows) = undefined
           -- if it does: fill it in and recurse
         -- -- check if word fits vertical (maybe via flipping)
 
--- todo return Maybe Row, fill in word if we match
+-- All possible permutations of fitting a word in a row
+fitWordPermutations :: Word -> Row -> [Row]
+fitWordPermutations word row
+  | length word > length row = []
+  | otherwise =
+    fitWord word row 
+
+validateWordFit :: (Row, Row) -> Maybe Row
+validateWordFit (match, []) = Just match
+validateWordFit (match, remainder@(Black:_)) =
+
+
+
+-- Try to fit a word in a row. Returns Just (match, remainder) if it fits.
+-- The first part (match) has the letters of the word filled in.
 fitWord :: Word -> Row -> Maybe (Row, Row)
 fitWord _ []                 = Nothing
 fitWord [] row               = Just ([], row)
