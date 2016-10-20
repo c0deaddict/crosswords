@@ -9,10 +9,11 @@ module Lib
     , lettersToEmptyRatio
     ) where
 
+import           Control.Arrow (first)
 import           Data.List
 import           Data.Maybe
 import           Data.Ratio
-import           Prelude    hiding (Word)
+import           Prelude       hiding (Word)
 
 type Word = String
 type WordList = [Word]
@@ -138,40 +139,53 @@ flipPuzzle = fmap (fmap flipPixel) <$> transpose where
 
 solve :: WordList -> Puzzle -> [Puzzle]
 solve [] puzzle = [puzzle]
-solve (word:rest) puzzle =
-  (solve rest puzzle) ++
-  (concatMap (solve rest) $
-    (flipPuzzle <$> fitWordIntoPuzzle word puzzle))
+solve words puzzle =
+  -- Solve without the first word
+  solve (tail words) puzzle ++
+  -- Recurse on all permutations of all words in each row on each position
+  -- on a flipped puzzle, with the remaining wordt list.
+  concatMap (uncurry (flip solve))
+    (first flipPuzzle <$> fitWordsIntoPuzzle words puzzle)
 
 
 -- All possible permutations of fitting a word into a puzzle
-fitWordIntoPuzzle :: Word -> Puzzle -> [Puzzle]
-fitWordIntoPuzzle word = concatMapRows (fitWordIntoRow word)
+fitWordsIntoPuzzle :: WordList -> Puzzle -> [(Puzzle, WordList)]
+fitWordsIntoPuzzle words = concatMapRows (fitWordsIntoRow words)
 
 
-concatMapRows :: (Row -> [Row]) -> Puzzle -> [Puzzle]
+concatMapRows :: (Row -> [(Row, WordList)]) -> Puzzle -> [(Puzzle, WordList)]
 concatMapRows rowFn puzzle =
   concatMap mapRow $ init $ subLists puzzle where
-    mapRow (h, row:t) = map (assemblePuzzle h t) $ rowFn row
+    mapRow (h, row:t) = map (first (assemblePuzzle h t)) $ rowFn row
     assemblePuzzle h t row = h ++ [row] ++ t
 
 
--- All possible permutations of fitting a word in a row
-fitWordIntoRow :: Word -> Row -> [Row]
-fitWordIntoRow word row = mapMaybe tryFit rowOffsets where
-  minLength r = length r >= length word
-  -- Split row into all possible offets. Tail must have min length of word
-  rowOffsets = filter (minLength . snd) $ subLists row
+-- All permutations of fitting each word in a row
+fitWordsIntoRow :: WordList -> Row -> [(Row, WordList)]
+fitWordsIntoRow words row = mapMaybe tryFit rowOffsets where
+  -- Split row into all possible offets
+  rowOffsets = subLists row
   -- Fits are only viable if either the last of head is [], Empty or Black
   -- When Empty it is replaced by Black
-  tryFit :: (Row, Row) -> Maybe Row
-  tryFit ([], t) = fitWord word t
+  tryFit :: (Row, Row) -> Maybe (Row, WordList)
+  tryFit ([], t) = searchWord words t
   tryFit (h, t) = case last h of
     Empty -> tryFitAppend (init h ++ [Black]) t
     Black -> tryFitAppend h t
     _     -> Nothing
   -- If the tail fits, then append the head
-  tryFitAppend h t = (++) h <$> fitWord word t
+  tryFitAppend h t = first (h ++) <$> searchWord words t
+
+
+-- Search for a word that can fit in the row
+-- When found return the updated Row and the remaining WordList
+searchWord :: WordList -> Row -> Maybe (Row, WordList)
+searchWord = searchWordAcc [] where
+  searchWordAcc _ [] _ = Nothing
+  searchWordAcc acc (word:rest) row =
+    case fitWord word row of
+      Nothing  -> searchWord rest row
+      Just row -> Just (row, acc ++ rest)
 
 
 -- Try to fit a word in a row. Fills the word into the row if it fits.
